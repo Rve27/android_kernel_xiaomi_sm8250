@@ -1,4 +1,4 @@
-name: Alpha Kernel Build - Fixed Path
+name: Alpha Kernel Build - Final Fix
 
 on:
   workflow_dispatch:
@@ -11,6 +11,11 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
+          # Use depth 1 to avoid history issues and speed up
+          fetch-depth: 1
+          # Do not fetch submodules yet to see if it fixes the error
+          submodules: false
+          # Ensure it uses the correct branch
           ref: lineage-23.1-ksu-next
 
       - name: Install Dependencies
@@ -24,29 +29,33 @@ jobs:
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r574158.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C aosp-clang
 
-      - name: Patch Defconfig for KSU
+      - name: Patch Defconfig
         run: |
           DEFCONFIG_FILE="arch/arm64/configs/vendor/xiaomi/alioth_defconfig"
           if [ -f "$DEFCONFIG_FILE" ]; then
             echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
             echo "CONFIG_KSU_NEXT_GEN_IPTABLES=y" >> $DEFCONFIG_FILE
             echo "# CONFIG_KSU_DEBUG is not set" >> $DEFCONFIG_FILE
+            echo "Defconfig patched."
+          else
+            echo "Defconfig not found at $DEFCONFIG_FILE"
+            # List files to find the correct path if it fails
+            find arch/arm64/configs -name "*defconfig"
+            exit 1
           fi
 
       - name: Run Build Script
         run: |
-          # Fixing permissions and line endings
           dos2unix scripts/compile.sh
           chmod +x scripts/compile.sh
-          
-          # IMPORTANT: Removed the wrong 'RvCompiler' folder from path
+          # Use absolute path for Clang
           ./scripts/compile.sh \
             -d vendor/xiaomi/alioth_defconfig \
             -c $GITHUB_WORKSPACE/aosp-clang \
             -u Alpha \
             -H RvEnterprises
 
-      - name: Upload Kernel
+      - name: Upload Result
         if: success()
         uses: actions/upload-artifact@v4
         with:
