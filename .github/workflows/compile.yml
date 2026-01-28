@@ -1,35 +1,57 @@
-name: Compile kernel
+name: Alpha Kernel Build - Fixed Path
 
 on:
   workflow_dispatch:
 
 jobs:
-  compile:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          ref: lineage-23.1-ksu-next
 
-      - name: Get AOSP Clang
+      - name: Install Dependencies
         run: |
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/mirror-goog-main-llvm-toolchain-source/clang-r574158.tar.gz
-          mkdir aosp-clang
-          tar -xzf clang-r574158.tar.gz -C aosp-clang
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential flex bison lld llvm clang libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libtinfo5 dos2unix
 
-      - name: Compile kernel
-        run: ./scripts/RvCompiler/compile.sh DEFCONFIG=vendor/xiaomi/alioth_defconfig CLANG_DIR=$PWD/aosp-clang KBUILD_BUILD_USER=Rve KBUILD_BUILD_HOST=RvEnterprises
+      - name: Setup Toolchain
+        run: |
+          mkdir -p aosp-clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r574158.tar.gz -O clang.tar.gz
+          tar -xzf clang.tar.gz -C aosp-clang
 
-      - name: Upload Image & DTBO
+      - name: Patch Defconfig for KSU
+        run: |
+          DEFCONFIG_FILE="arch/arm64/configs/vendor/xiaomi/alioth_defconfig"
+          if [ -f "$DEFCONFIG_FILE" ]; then
+            echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
+            echo "CONFIG_KSU_NEXT_GEN_IPTABLES=y" >> $DEFCONFIG_FILE
+            echo "# CONFIG_KSU_DEBUG is not set" >> $DEFCONFIG_FILE
+          fi
+
+      - name: Run Build Script
+        run: |
+          # Fixing permissions and line endings
+          dos2unix scripts/compile.sh
+          chmod +x scripts/compile.sh
+          
+          # IMPORTANT: Removed the wrong 'RvCompiler' folder from path
+          ./scripts/compile.sh \
+            -d vendor/xiaomi/alioth_defconfig \
+            -c $GITHUB_WORKSPACE/aosp-clang \
+            -u Alpha \
+            -H RvEnterprises
+
+      - name: Upload Kernel
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: RvKernel-Alioth
+          name: AlphaKernel-Alioth
           path: |
             out/arch/arm64/boot/Image
-            out/arch/arm64/boot/dtb.img
             out/arch/arm64/boot/dtbo.img
-
-      - name: Upload log
-        uses: actions/upload-artifact@v4
-        with:
-          name: compile-log
-          path: out/compile.log
+            out/arch/arm64/boot/dtb.img
