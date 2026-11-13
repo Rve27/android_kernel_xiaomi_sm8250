@@ -14,6 +14,15 @@ KBUILD_BUILD_HOST="$(hostname)"
 CLEAN_BUILD="false"
 ENABLE_CCACHE="false"
 
+EXTRA_HOST_FLAGS=()
+if [ -d "/usr/include/openssl-1.1" ] && [ -d "/usr/lib/openssl-1.1" ]; then
+    EXTRA_HOST_FLAGS=(
+        HOSTCFLAGS="-I/usr/include/openssl-1.1"
+        HOSTLDFLAGS="-L/usr/lib/openssl-1.1 -Wl,-rpath,/usr/lib"
+        HOSTLOADLIBES_extract-cert="-L/usr/lib/openssl-1.1 -lcrypto"
+    )
+fi
+
 BUILD_START=$(date +"%s")
 
 show_help() {
@@ -174,6 +183,7 @@ make O=out LLVM=1 ARCH=arm64 \
     HOSTCXX="$_CXX_host" \
     HOSTAR=llvm-ar \
     HOSTLD=ld.lld \
+    "${EXTRA_HOST_FLAGS[@]}" \
     CROSS_COMPILE=arm64-linux-gnu- \
     $DEFCONFIG
 
@@ -194,6 +204,7 @@ compile () {
     HOSTCXX="$_CXX_host" \
     HOSTAR=llvm-ar \
     HOSTLD=ld.lld \
+    "${EXTRA_HOST_FLAGS[@]}" \
     CROSS_COMPILE=arm64-linux-gnu-
 }
 

@@ -137,3 +137,6 @@ kernel/configs/android-*.cfg
 
 # out directory
 out/
+
+# toolchain
+toolchain/
