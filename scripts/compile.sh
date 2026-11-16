@@ -11,6 +11,7 @@ CLANG_DIR=""
 DEFCONFIG=""
 KBUILD_BUILD_USER="$(whoami)"
 KBUILD_BUILD_HOST="$(hostname)"
+OUTPUT_DIR="out"
 CLEAN_BUILD="false"
 ENABLE_CCACHE="false"
 
@@ -32,6 +33,7 @@ show_help() {
     echo "Options:"
     echo "  -d, --defconfig <name>    Set defconfig name (Required)"
     echo "  -c, --clang-dir <path>    Set path to Clang directory (Required)"
+    echo "  -o, --output <path>       Set output directory path (Default: out)"
     echo "  -u, --user <name>         Set KBUILD_BUILD_USER (Default: $(whoami))"
     echo "  -H, --host <name>         Set KBUILD_BUILD_HOST (Default: $(hostname))"
     echo "      --clean               Clean build output before compiling"
@@ -40,6 +42,7 @@ show_help() {
     echo ""
     echo "Example:"
     echo "  $0 -d rve_defconfig -c toolchain/aosp-clang"
+    echo "  $0 -d rve_defconfig -c toolchain/aosp-clang -o build"
 }
 
 _CC_clang="clang"
@@ -60,6 +63,15 @@ while [ $# -gt 0 ]; do
         -c|--clang-dir)
             if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
                 CLANG_DIR="$2"
+                shift 2
+            else
+                echo -e "${RED}Error: Argument for $1 is missing${NC}" >&2
+                exit 1
+            fi
+            ;;
+        -o|--output)
+            if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+                OUTPUT_DIR="$2"
                 shift 2
             else
                 echo -e "${RED}Error: Argument for $1 is missing${NC}" >&2
@@ -129,6 +141,7 @@ echo -e "${GREEN}Using DEFCONFIG: $DEFCONFIG${NC}"
 echo -e "${GREEN}Using CLANG_DIR: $CLANG_DIR${NC}"
 echo -e "${GREEN}Using KBUILD_BUILD_USER: $KBUILD_BUILD_USER${NC}"
 echo -e "${GREEN}Using KBUILD_BUILD_HOST: $KBUILD_BUILD_HOST${NC}"
+echo -e "${GREEN}Using OUTPUT_DIR: $OUTPUT_DIR${NC}"
 
 if [ "$ENABLE_CCACHE" = "true" ]; then
     echo -e "${GREEN}Using ccache${NC}"
@@ -140,28 +153,28 @@ if [ "$ENABLE_CCACHE" = "true" ]; then
 fi
 
 if [ "$CLEAN_BUILD" = "true" ]; then
-    if [ -d "out" ]; then
+    if [ -d "$OUTPUT_DIR" ]; then
         echo ""
-        echo -e "${GREEN}Clean build requested - removing out directory...${NC}"
-        rm -rf out
+        echo -e "${GREEN}Clean build requested - removing $OUTPUT_DIR directory...${NC}"
+        rm -rf "$OUTPUT_DIR"
     else
-        echo -e "${GREEN}Clean build requested but out directory doesn't exist${NC}"
+        echo -e "${GREEN}Clean build requested but $OUTPUT_DIR directory doesn't exist${NC}"
     fi
 fi
 
-if [ ! -d "out" ]; then
+if [ ! -d "$OUTPUT_DIR" ]; then
     echo ""
-    echo -e "${GREEN}Creating out directory...${NC}"
-    mkdir -p out
+    echo -e "${GREEN}Creating $OUTPUT_DIR directory...${NC}"
+    mkdir -p "$OUTPUT_DIR"
 else
     echo ""
-    echo -e "${GREEN}Out directory already exists${NC}"
+    echo -e "${GREEN}$OUTPUT_DIR directory already exists${NC}"
 fi
 
-if [ -f "out/compile.log" ]; then
+if [ -f "$OUTPUT_DIR/compile.log" ]; then
     echo ""
     echo -e "${GREEN}Removing old compile.log...${NC}"
-    rm -f out/compile.log
+    rm -f "$OUTPUT_DIR/compile.log"
 fi
 
 export KBUILD_BUILD_USER=$KBUILD_BUILD_USER
@@ -169,7 +182,7 @@ export KBUILD_BUILD_HOST=$KBUILD_BUILD_HOST
 export PATH="$CLANG_DIR/bin:$PATH"
 
 echo -e "${GREEN}Generating defconfig...${NC}"
-make O=out LLVM=1 ARCH=arm64 \
+make O="$OUTPUT_DIR" LLVM=1 ARCH=arm64 \
     CC="$_CC_clang" \
     LD=ld.lld \
     AR=llvm-ar \
@@ -189,7 +202,7 @@ make O=out LLVM=1 ARCH=arm64 \
 
 compile () {
     echo -e "${GREEN}Starting kernel compilation...${NC}"
-    make -j$(nproc --all) O=out LLVM=1 \
+    make -j$(nproc --all) O="$OUTPUT_DIR" LLVM=1 \
     ARCH=arm64 \
     CC="$_CC_clang" \
     LD=ld.lld \
@@ -208,7 +221,7 @@ compile () {
     CROSS_COMPILE=arm64-linux-gnu-
 }
 
-compile 2>&1 | tee -a out/compile.log
+compile 2>&1 | tee -a "$OUTPUT_DIR/compile.log"
 
 BUILD_END=$(date +"%s")
 DIFF=$((BUILD_END - BUILD_START))
